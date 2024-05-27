@@ -13,10 +13,11 @@ from aiogram.fsm.context import FSMContext
 from urls import parse_urls
 from filters import IsExist, IsProduct, ValidValue
 from states import ParseProduct
-from keyboards import column_reply_keyboard, inline_keyboard, pagination
+from keyboards import column_reply_keyboard, inline_keyboard, pagination, one_inline_button
 from settings import sorts, SHOW_PRODUCT
 from parser import parse
 from callbacks import UserPage
+from utils import check_is_in
 
 router = Router()
 
@@ -35,7 +36,7 @@ async def start(message: types.Message, state: FSMContext):
 
 
 @router.message(
-    IsExist(["Меню", "Главная", "Главное"])
+    IsExist(["меню", "главная", "главное"])
 )
 @router.callback_query(F.data == "menu")
 async def get_category(inp_data: types.Message or types.CallbackQuery, state: FSMContext):
@@ -50,45 +51,59 @@ async def get_category(inp_data: types.Message or types.CallbackQuery, state: FS
 
 @router.message(
     ParseProduct.category,
-    IsExist(parse_urls.keys())
 )
 async def get_product(message: types.Message, state: FSMContext):
-    await state.update_data(category=message.text)
-    await state.set_state(ParseProduct.product)
-    await message.answer("Выберите тип товара", reply_markup=column_reply_keyboard(
-        len(parse_urls[message.text.lower().title()]), list(parse_urls[message.text])))
+    if message.text.lower() in list(name.lower() for name in parse_urls.keys()):
+        await state.update_data(category=message.text)
+        await state.set_state(ParseProduct.product)
+        await message.answer("Выберите тип товара", reply_markup=column_reply_keyboard(
+            len(parse_urls[message.text.lower().title()]), list(parse_urls[message.text])))
+    else:
+        await message.answer("Вы ввели неверную категорию", reply_markup=one_inline_button("Отменить", "cancel"))
 
 
 @router.message(
     ParseProduct.product,
-    IsProduct(parse_urls)
 )
 async def get_sort_type(message: types.Message, state: FSMContext):
-    await state.update_data(product=message.text)
-    await state.set_state(ParseProduct.sort)
-    await message.answer("Выберите тип сортировки", reply_markup=column_reply_keyboard(
-        len(sorts.keys()), list(sorts.keys())))
+    if check_is_in(parse_urls, message.text.title()):
+        await state.update_data(product=message.text)
+        await state.set_state(ParseProduct.sort)
+        await message.answer("Выберите тип сортировки", reply_markup=column_reply_keyboard(
+            len(sorts.keys()), list(sorts.keys())))
+    else:
+        await message.answer("Такого товара не существует", reply_markup=one_inline_button("Отменить", "cancel"))
 
 
 @router.message(
     ParseProduct.sort,
-    IsExist(sorts.keys())
 )
 async def get_product_count(message: types.Message, state: FSMContext):
-    await state.update_data(sort=message.text)
-    await state.set_state(ParseProduct.count)
-    await message.answer("Выберите число товаров от 100 до 10000", reply_markup=column_reply_keyboard(
-        10, ['100', '1000', '2000', '3000', '3500', '4000', '5000', '6000', '8000', '100000']
-    ))
+    if message.text.title() in list(sorts.keys()):
+        await state.update_data(sort=message.text)
+        await state.set_state(ParseProduct.count)
+        await message.answer("Выберите число товаров от 100 до 10000", reply_markup=column_reply_keyboard(
+            10, ['100', '1000', '2000', '3000', '3500', '4000', '5000', '6000', '8000', '100000']
+        ))
+    else:
+        await message.answer("Такого типа сортировки не существует",
+                             reply_markup=one_inline_button("Отменить", "cancel"))
 
 
 @router.message(
     ParseProduct.count,
-    ValidValue()
 )
 async def get_user_data(message: types.Message, state: FSMContext):
-    await state.update_data(count=int(message.text))
-    await message.answer("Cбор информации: 0%", reply_markup=inline_keyboard(1, 1, ["Начать"], ["start_parse"]))
+    if message.text.isnumeric() and int(message.text)%100 == 0:
+        if 100 <= int(message.text) <= 10000:
+            await state.update_data(count=int(message.text))
+            await message.answer("Cбор информации: 0%", reply_markup=inline_keyboard(1, 1, ["Начать"], ["start_parse"]))
+        else:
+            await message.answer("Вы ввели слишком большое или слишком маленькое число",
+                                 reply_markup=one_inline_button("Отменить", "cancel"))
+    else:
+        await message.answer("Вы ввели неккоректное число",
+                             reply_markup=one_inline_button("Отменить", "cancel"))
 
 
 @router.callback_query(F.data == "start_parse")

@@ -42,3 +42,7 @@ def pagination(pages: int, page: int = 1):
     builder.row(InlineKeyboardButton(text="Сохранить в таблице", callback_data="save_table"))
     builder.row(InlineKeyboardButton(text="Меню", callback_data="menu"))
     return builder.as_markup()
+
+
+def one_inline_button(text: str, data: str):
+    return InlineKeyboardBuilder().add(InlineKeyboardButton(text=text, callback_data=data)).as_markup()
